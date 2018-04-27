@@ -1,3 +1,13 @@
+/*
+ * Run program and blacklist its syscalls.
+ *
+ * Compilation 32bits :
+ * gcc -m32 -Wall -fstack-protector-all -O2 sandbox.c -o sandbox
+ *
+ * Compilation 64bits:
+ * gcc -m64 -Wall -fstack-protector-all -O2 sandbox.c -o sandbox
+ */
+
 #include <sys/ptrace.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -12,64 +22,55 @@
 #include <errno.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <sys/syscall.h>
+
+#define SYSCALLS 512
+
+#define BLACKLIST_SYSCALL(s) do { \
+    syscalls_blacklist[s] = 1;	  \
+    syscalls_strings[s] = #s;	  \
+  } while(0)
 
 struct sandbox {
   pid_t child;
   const char *progname;
 };
 
-struct sandb_syscall {
-  int syscall;
-  void (*callback)(struct sandbox*, struct user_regs_struct *regs);
-};
+static unsigned char syscalls_blacklist[SYSCALLS] = {0};
+static const char *syscalls_strings[SYSCALLS] = {NULL};
 
-struct sandb_syscall sandb_syscalls[] = {
-  {__NR_read,            NULL},
-  {__NR_write,           NULL},
-  {__NR_exit,            NULL},
-  {__NR_brk,             NULL},
-  {__NR_mmap,            NULL},
-  {__NR_access,          NULL},
-  {__NR_open,            NULL},
-  {__NR_fstat,           NULL},
-  {__NR_close,           NULL},
-  {__NR_mprotect,        NULL},
-  {__NR_munmap,          NULL},
-  {__NR_arch_prctl,      NULL},
-  {__NR_exit_group,      NULL},
-  {__NR_getdents,        NULL},
-};
-
-void sandb_kill(struct sandbox *sandb) {
+static void sandb_kill(struct sandbox *sandb) {
   kill(sandb->child, SIGKILL);
   wait(NULL);
   exit(EXIT_FAILURE);
 }
 
-void sandb_handle_syscall(struct sandbox *sandb) {
-  int i;
+#ifdef __x86_64__
+#define GET_AX_REG(regs) ((regs).orig_rax)
+#else
+#define GET_AX_REG(regs) ((regs).orig_eax)
+#endif
+
+static void sandb_handle_syscall(struct sandbox *sandb) {
   struct user_regs_struct regs;
 
   if(ptrace(PTRACE_GETREGS, sandb->child, NULL, &regs) < 0)
     err(EXIT_FAILURE, "[SANDBOX] Failed to PTRACE_GETREGS:");
 
-  for(i = 0; i < sizeof(sandb_syscalls)/sizeof(*sandb_syscalls); i++) {
-    if(regs.orig_rax == sandb_syscalls[i].syscall) {
-      if(sandb_syscalls[i].callback != NULL)
-        sandb_syscalls[i].callback(sandb, &regs);
-      return;
+  if(GET_AX_REG(regs) < 0 ||
+     GET_AX_REG(regs) >= SYSCALLS ||
+     syscalls_blacklist[GET_AX_REG(regs)]) {
+    if(GET_AX_REG(regs) == -1) {
+      printf("[SANDBOX] Segfault ?! KILLING !!!\n");
+    } else {
+      printf("[SANDBOX] Trying to use blacklisted syscall (%s) "
+	     "?!? KILLING !!!\n", syscalls_strings[GET_AX_REG(regs)]);
     }
+    sandb_kill(sandb);
   }
-
-  if(regs.orig_rax == -1) {
-    printf("[SANDBOX] Segfault ?! KILLING !!!\n");
-  } else {
-    printf("[SANDBOX] Trying to use devil syscall (%llu) ?!? KILLING !!!\n", regs.orig_rax);
-  }
-  sandb_kill(sandb);
 }
 
-void sandb_init(struct sandbox *sandb, int argc, char **argv) {
+static void sandb_init(struct sandbox *sandb, int argc, char **argv) {
   pid_t pid;
 
   pid = fork();
@@ -82,9 +83,8 @@ void sandb_init(struct sandbox *sandb, int argc, char **argv) {
     if(ptrace(PTRACE_TRACEME, 0, NULL, NULL) < 0)
       err(EXIT_FAILURE, "[SANDBOX] Failed to PTRACE_TRACEME:");
 
-    if(execv(argv[0], argv) < 0)
-      err(EXIT_FAILURE, "[SANDBOX] Failed to execv:");
-
+    execv(argv[0], argv);
+    err(EXIT_FAILURE, "[SANDBOX] Failed to execv:");
   } else {
     sandb->child = pid;
     sandb->progname = argv[0];
@@ -92,7 +92,7 @@ void sandb_init(struct sandbox *sandb, int argc, char **argv) {
   }
 }
 
-void sandb_run(struct sandbox *sandb) {
+static void sandb_run(struct sandbox *sandb) {
   int status;
 
   if(ptrace(PTRACE_SYSCALL, sandb->child, NULL, NULL) < 0) {
@@ -114,6 +114,27 @@ void sandb_run(struct sandbox *sandb) {
   }
 }
 
+/*
+ * Add or remove syscalls from this list.
+ * Some syscalls are needed to run the target program correctly.
+ */
+static void init_blacklist(void) {
+  BLACKLIST_SYSCALL(__NR_execve);
+  BLACKLIST_SYSCALL(__NR_fork);
+  BLACKLIST_SYSCALL(__NR_vfork);
+  BLACKLIST_SYSCALL(__NR_clone);
+  BLACKLIST_SYSCALL(__NR_rt_sigreturn);
+  BLACKLIST_SYSCALL(__NR_dup2);
+  BLACKLIST_SYSCALL(__NR_socket);
+  BLACKLIST_SYSCALL(__NR_kill);
+  BLACKLIST_SYSCALL(__NR_unlink);
+  BLACKLIST_SYSCALL(__NR_chmod);
+  BLACKLIST_SYSCALL(__NR_chown);
+  BLACKLIST_SYSCALL(__NR_ptrace);
+  BLACKLIST_SYSCALL(__NR_setuid);
+  BLACKLIST_SYSCALL(__NR_mount);
+}
+
 int main(int argc, char **argv) {
   struct sandbox sandb;
 
@@ -121,6 +142,7 @@ int main(int argc, char **argv) {
     errx(EXIT_FAILURE, "[SANDBOX] Usage : %s <elf> [<arg1...>]", argv[0]);
   }
 
+  init_blacklist();
   sandb_init(&sandb, argc-1, argv+1);
 
   for(;;) {
