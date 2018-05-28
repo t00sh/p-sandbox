@@ -29,14 +29,14 @@
 
 #define SYSCALLS 512
 
-#define BLACKLIST_SYSCALL(s) do { \
-    syscalls_blacklist[s] = 1;	  \
-    syscalls_strings[s] = #s;	  \
+#define BLACKLIST_SYSCALL(s) do {               \
+    syscalls_blacklist[s] = 1;                  \
+    syscalls_strings[s] = #s;                   \
   } while(0)
 
-#define CALLBACK_SYSCALL(s,c) do { \
-    syscalls_callbacks[s] = c;	   \
-    syscalls_strings[s] = #s;	   \
+#define CALLBACK_SYSCALL(s,c) do {              \
+    syscalls_callbacks[s] = c;                  \
+    syscalls_strings[s] = #s;                   \
   } while(0)
 
 struct sandbox {
@@ -47,7 +47,7 @@ struct sandbox {
 static unsigned char syscalls_blacklist[SYSCALLS] = {0};
 static const char *syscalls_strings[SYSCALLS] = {NULL};
 static void (*syscalls_callbacks[SYSCALLS])(struct sandbox*,
-					    struct user_regs_struct *);
+                                            struct user_regs_struct *);
 
 static void sandb_kill(struct sandbox *sandb) {
   kill(sandb->child, SIGKILL);
@@ -81,18 +81,18 @@ static void sandb_dump_buffer(uint8_t *buffer, regint length) {
     printf("[SANDBOX] ");
     for(j = 0; j < 16; j++) {
       if(i + j < length) {
-	printf("%.2" PRIx8 " ", buffer[i + j]);
+        printf("%.2" PRIx8 " ", buffer[i + j]);
       } else {
-	printf("%-3s", " ");
+        printf("%-3s", " ");
       }
     }
     for(j = 0; j < 16; j++) {
       if(i + j < length) {
-	if(isgraph(buffer[i + j])) {
-	  putchar(buffer[i + j]);
-	} else {
-	  putchar('.');
-	}
+        if(isgraph(buffer[i + j])) {
+          putchar(buffer[i + j]);
+        } else {
+          putchar('.');
+        }
       }
     }
     printf("\n");
@@ -101,7 +101,7 @@ static void sandb_dump_buffer(uint8_t *buffer, regint length) {
 }
 
 static void sandb_dump_address(struct sandbox *sandb,
-			       regint address, regint length) {
+                               regint address, regint length) {
   regint word, i;
   uint8_t *buffer;
 
@@ -125,7 +125,7 @@ static void sandb_dump_address(struct sandbox *sandb,
 }
 
 static void sandb_handle_write(struct sandbox *sandb,
-			       struct user_regs_struct *regs) {
+                               struct user_regs_struct *regs) {
 
   regint length = GET_ARG3_REG(regs);
   regint address = GET_ARG2_REG(regs);
@@ -134,7 +134,7 @@ static void sandb_handle_write(struct sandbox *sandb,
 }
 
 static void sandb_handle_sendto(struct sandbox *sandb,
-				struct user_regs_struct *regs) {
+                                struct user_regs_struct *regs) {
 
   regint length = GET_ARG3_REG(regs);
   regint address = GET_ARG2_REG(regs);
@@ -159,7 +159,7 @@ static void sandb_handle_syscall(struct sandbox *sandb) {
       printf("[SANDBOX] Segfault ?! KILLING !!!\n");
     } else {
       printf("[SANDBOX] Trying to use blacklisted syscall (%s) "
-	     "?!? KILLING !!!\n", syscalls_strings[syscall_reg]);
+             "?!? KILLING !!!\n", syscalls_strings[syscall_reg]);
     }
 
     sandb_kill(sandb);
