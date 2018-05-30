@@ -11,12 +11,12 @@ There is no configuration file, you must edit the source itself...
 
 ## To compile :
 
-$ gcc -o p-sandbox p-sandbox.c
+$ make
 
 
 ## To run :
 
-$ ./p-sandbox /sandboxed/process
+$ ./sandbox /sandboxed/process
 
 
 ## Author
