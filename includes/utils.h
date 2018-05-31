@@ -2,8 +2,8 @@
 #define DEF_UTILS_H
 
 #include <stdint.h>
-#include "syscall.h"
+#include <stdio.h>
 
-void hexdump_buffer(uint8_t *buffer, regint length);
+void hexdump_buffer(FILE *stream, uint8_t *buffer, size_t length);
 
 #endif /* DEF_UTILS_H */

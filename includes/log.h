@@ -9,6 +9,10 @@
     fprintf(_stream, __VA_ARGS__);              \
   } while(0)
 
+#define LOG_APPEND(_stream, ...) do {           \
+    fprintf(_stream, __VA_ARGS__);              \
+  } while(0)
+
 #define LOG(_stream, ...) do {                  \
     fprintf(_stream, "[SANDBOX] ");             \
     fprintf(_stream, __VA_ARGS__);              \

@@ -1,7 +1,6 @@
 #define _POSIX_SOURCE
 #include <sys/ptrace.h>
 #include <errno.h>
-#include <err.h>
 #include <signal.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -16,6 +15,7 @@
 #include "syscalls.h"
 #include "sandbox.h"
 #include "utils.h"
+#include "log.h"
 
 static void sandbox_kill(struct sandbox *sandb) {
   if(sandb->log != stdout && sandb->log != stderr) {
@@ -31,18 +31,20 @@ static void sandbox_handle_syscall(struct sandbox *sandb) {
   int syscall_reg;
 
   if(ptrace(PTRACE_GETREGS, sandb->pid, NULL, &regs) < 0)
-    err(EXIT_FAILURE, "[SANDBOX] Failed to PTRACE_GETREGS:");
+    LOG_ERR(sandb->log, "Failed to PTRACE_GETREGS");
 
   syscall_reg = GET_SYSCALL_REG(&regs);
 
   if(!syscall_is_allowed(syscall_reg)) {
-    printf("[SANDBOX] Trying to use blacklisted syscall (%s) "
-           "?!? KILLING !!!\n", syscall_string(syscall_reg));
+    LOGN(sandb->log, "Trying to use blacklisted syscall (%s) ?!?",
+         syscall_string(syscall_reg));
     sandbox_kill(sandb);
   }
 
-  printf("[SANDBOX] Executing syscall %s...\n", syscall_string(syscall_reg));
-  syscall_exec_handler(syscall_reg, sandb, &regs);
+  if(sandb->trace) {
+    LOGN(sandb->log, "Executing syscall %s...", syscall_string(syscall_reg));
+    syscall_exec_handler(syscall_reg, sandb, &regs);
+  }
 }
 
 static void sandbox_step(struct sandbox *sandb) {
@@ -53,7 +55,7 @@ static void sandbox_step(struct sandbox *sandb) {
       waitpid(sandb->pid, &status, __WALL | WNOHANG);
       sandbox_kill(sandb);
     } else {
-      err(EXIT_FAILURE, "[SANDBOX] Failed to PTRACE_SYSCALL");
+      LOG_ERR(sandb->log, "Failed to PTRACE_SYSCALL");
     }
   }
 
@@ -66,7 +68,7 @@ static void sandbox_step(struct sandbox *sandb) {
     sandbox_handle_syscall(sandb);
 
     if(ptrace(PTRACE_SYSCALL, sandb->pid, NULL, NULL) < 0) {
-      err(EXIT_FAILURE, "[SANDBOX] Failed to PTRACE_SYSCALL");
+      LOG_ERR(sandb->log, "Failed to PTRACE_SYSCALL");
     }
     wait(&status);
   }
@@ -78,22 +80,24 @@ void sandbox_dump_address(struct sandbox *sandb,
   size_t i;
   uint8_t *buffer;
 
-  buffer = malloc(length);
-  if(buffer == NULL)
-    err(EXIT_FAILURE, "[SANDBOX] Failed to allocate buffer:");
+  if((buffer = malloc(length)) == NULL) {
+    LOG_ERR(sandb->log, "Failed to allocate buffer");
+  }
 
   for(i = 0; i < length; i += sizeof word) {
     word = ptrace(PTRACE_PEEKDATA, sandb->pid, address + i, NULL);
-    if(word < 0)
-      err(EXIT_FAILURE, "[SANDBOX] Failed to PTRACE_PEEKDATA:");
+    if(word < 0) {
+      LOG_ERR(sandb->log, "Failed to PTRACE_PEEKDATA");
+    }
 
-    if(i + sizeof word > (size_t) length)
+    if(i + sizeof word > (size_t) length) {
       memcpy(buffer + i, &word, length - i);
-    else
+    } else {
       memcpy(buffer + i, &word, sizeof word);
+    }
   }
 
-  hexdump_buffer(buffer, length);
+  hexdump_buffer(sandb->log, buffer, length);
   free(buffer);
 }
 
@@ -108,16 +112,18 @@ void sandbox_init(struct sandbox *sandb) {
 void sandbox_run(struct sandbox *sandb) {
   sandb->pid = fork();
 
-  if(sandb->pid == -1)
-    err(EXIT_FAILURE, "[SANDBOX] Error on fork");
+  if(sandb->pid == -1) {
+    LOG_ERR(sandb->log, "Error on fork");
+  }
 
   if(sandb->pid == 0) {
 
-    if(ptrace(PTRACE_TRACEME, 0, NULL, NULL) < 0)
-      err(EXIT_FAILURE, "[SANDBOX] Failed to PTRACE_TRACEME");
+    if(ptrace(PTRACE_TRACEME, 0, NULL, NULL) < 0) {
+      LOG_ERR(sandb->log, "Failed to PTRACE_TRACEME");
+    }
 
     execv(sandb->argv[0], sandb->argv);
-    err(EXIT_FAILURE, "[SANDBOX] Failed to execv");
+    LOG_ERR(sandb->log, "Failed to execv %s", sandb->argv[0]);
   } else {
     wait(NULL);
   }
