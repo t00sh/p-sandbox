@@ -5,8 +5,8 @@
 static void write_handler(struct sandbox *sandb,
                           struct user_regs_struct *regs) {
 
-  regint length = GET_ARG3_REG(regs);
-  regint address = GET_ARG2_REG(regs);
+  size_t length = GET_ARG3_REG(regs);
+  long address = GET_ARG2_REG(regs);
 
   sandbox_dump_address(sandb, address, length);
 }
@@ -14,8 +14,8 @@ static void write_handler(struct sandbox *sandb,
 static void sendto_handler(struct sandbox *sandb,
                            struct user_regs_struct *regs) {
 
-  regint length = GET_ARG3_REG(regs);
-  regint address = GET_ARG2_REG(regs);
+  size_t length = GET_ARG3_REG(regs);
+  long address = GET_ARG2_REG(regs);
 
   sandbox_dump_address(sandb, address, length);
 }

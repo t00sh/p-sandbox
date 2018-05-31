@@ -25,23 +25,16 @@ static void sandbox_kill(struct sandbox *sandb) {
 
 static void sandbox_handle_syscall(struct sandbox *sandb) {
   struct user_regs_struct regs;
-  regint syscall_reg;
+  int syscall_reg;
 
   if(ptrace(PTRACE_GETREGS, sandb->pid, NULL, &regs) < 0)
     err(EXIT_FAILURE, "[SANDBOX] Failed to PTRACE_GETREGS:");
 
   syscall_reg = GET_SYSCALL_REG(&regs);
 
-  if(syscall_reg < 0 ||
-     syscall_reg >= SYSCALLS ||
-     !syscall_is_allowed(syscall_reg)) {
-    if(syscall_reg == -1) {
-      printf("[SANDBOX] Segfault ?! KILLING !!!\n");
-    } else {
-      printf("[SANDBOX] Trying to use blacklisted syscall (%s) "
-             "?!? KILLING !!!\n", syscall_string(syscall_reg));
-    }
-
+  if(!syscall_is_allowed(syscall_reg)) {
+    printf("[SANDBOX] Trying to use blacklisted syscall (%s) "
+           "?!? KILLING !!!\n", syscall_string(syscall_reg));
     sandbox_kill(sandb);
   }
 
@@ -50,8 +43,9 @@ static void sandbox_handle_syscall(struct sandbox *sandb) {
 }
 
 void sandbox_dump_address(struct sandbox *sandb,
-                          regint address, regint length) {
-  regint word, i;
+                          long address, size_t length) {
+  long word;
+  size_t i;
   uint8_t *buffer;
 
   buffer = malloc(length);

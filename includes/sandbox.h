@@ -13,5 +13,5 @@ struct sandbox {
 void sandbox_init(struct sandbox *sandb, int argc, char **argv);
 void sandbox_run(struct sandbox *sandb);
 void sandbox_dump_address(struct sandbox *sandb,
-                          regint address, regint length);
+                          long address, size_t length);
 #endif /* DEF_SANDBOX_H */

@@ -6,31 +6,35 @@
 
 #include "syscalls.h"
 
-static struct syscall syscalls[SYSCALLS];
+static struct syscall g_syscalls[SYSCALLS];
 
-#define SYSCALL_INIT(s) do {                             \
-  syscalls[s].string  = #s;                              \
-  syscalls[s].handler = NULL;                            \
-  syscalls[s].allowed = false;                           \
+#define SYSCALL_INIT(s) do {                               \
+    g_syscalls[s].string  = #s;                            \
+    g_syscalls[s].handler = NULL;                          \
+    g_syscalls[s].allowed = false;                         \
   } while(0)
 
 bool syscall_is_allowed(int syscall) {
-  assert(syscall >= 0 && syscall < SYSCALLS);
-  return syscalls[syscall].allowed;
+  if(syscall < 0 || syscall >= SYSCALLS)
+    return false;
+  return g_syscalls[syscall].allowed;
 }
 
 const char *syscall_string(int syscall) {
-  assert(syscall >= 0 && syscall < SYSCALLS);
-  return syscalls[syscall].string + 5;
+  if(syscall < 0 || syscall >= SYSCALLS)
+    return "bad syscall";
+  if(g_syscalls[syscall].string == NULL)
+    return "unknown syscall";
+  return g_syscalls[syscall].string + 5;
 }
 
 int syscall_allow(const char *string) {
   int i;
 
   for(i = 0; i < SYSCALLS; i++) {
-    if(syscalls[i].string != NULL) {
+    if(g_syscalls[i].string != NULL) {
       if(!strcmp(syscall_string(i), string)) {
-        syscalls[i].allowed = true;
+        g_syscalls[i].allowed = true;
         return 1;
       }
     }
@@ -40,14 +44,14 @@ int syscall_allow(const char *string) {
 
 void syscall_add_handler(int syscall, syscall_handler handler) {
   assert(syscall >= 0 && syscall < SYSCALLS);
-  syscalls[syscall].handler = handler;
+  g_syscalls[syscall].handler = handler;
 }
 
 void syscall_exec_handler(int syscall, struct sandbox *sandb,
                           struct user_regs_struct *regs) {
   assert(syscall >= 0 && syscall < SYSCALLS);
-  if(syscalls[syscall].handler) {
-    syscalls[syscall].handler(sandb, regs);
+  if(g_syscalls[syscall].handler) {
+    g_syscalls[syscall].handler(sandb, regs);
   }
 }
 
@@ -81,9 +85,11 @@ void syscalls_init(void) {
   SYSCALL_INIT(__NR_msync);
   SYSCALL_INIT(__NR_mincore);
   SYSCALL_INIT(__NR_madvise);
+#ifdef __x86_64__
   SYSCALL_INIT(__NR_shmget);
   SYSCALL_INIT(__NR_shmat);
   SYSCALL_INIT(__NR_shmctl);
+#endif
   SYSCALL_INIT(__NR_dup);
   SYSCALL_INIT(__NR_dup2);
   SYSCALL_INIT(__NR_pause);
@@ -95,7 +101,9 @@ void syscalls_init(void) {
   SYSCALL_INIT(__NR_sendfile);
   SYSCALL_INIT(__NR_socket);
   SYSCALL_INIT(__NR_connect);
+#ifdef __x86_64__
   SYSCALL_INIT(__NR_accept);
+#endif
   SYSCALL_INIT(__NR_sendto);
   SYSCALL_INIT(__NR_recvfrom);
   SYSCALL_INIT(__NR_sendmsg);
@@ -116,6 +124,7 @@ void syscalls_init(void) {
   SYSCALL_INIT(__NR_wait4);
   SYSCALL_INIT(__NR_kill);
   SYSCALL_INIT(__NR_uname);
+#ifdef __x86_64__
   SYSCALL_INIT(__NR_semget);
   SYSCALL_INIT(__NR_semop);
   SYSCALL_INIT(__NR_semctl);
@@ -124,6 +133,7 @@ void syscalls_init(void) {
   SYSCALL_INIT(__NR_msgsnd);
   SYSCALL_INIT(__NR_msgrcv);
   SYSCALL_INIT(__NR_msgctl);
+#endif
   SYSCALL_INIT(__NR_fcntl);
   SYSCALL_INIT(__NR_flock);
   SYSCALL_INIT(__NR_fsync);
@@ -236,8 +246,10 @@ void syscalls_init(void) {
   SYSCALL_INIT(__NR_getpmsg);
   SYSCALL_INIT(__NR_putpmsg);
   SYSCALL_INIT(__NR_afs_syscall);
+#ifdef __x86_64__
   SYSCALL_INIT(__NR_tuxcall);
   SYSCALL_INIT(__NR_security);
+#endif
   SYSCALL_INIT(__NR_gettid);
   SYSCALL_INIT(__NR_readahead);
   SYSCALL_INIT(__NR_setxattr);
@@ -266,13 +278,17 @@ void syscalls_init(void) {
   SYSCALL_INIT(__NR_get_thread_area);
   SYSCALL_INIT(__NR_lookup_dcookie);
   SYSCALL_INIT(__NR_epoll_create);
+#ifdef __x86_64__
   SYSCALL_INIT(__NR_epoll_ctl_old);
   SYSCALL_INIT(__NR_epoll_wait_old);
+#endif
   SYSCALL_INIT(__NR_remap_file_pages);
   SYSCALL_INIT(__NR_getdents64);
   SYSCALL_INIT(__NR_set_tid_address);
   SYSCALL_INIT(__NR_restart_syscall);
+#ifdef __x86_64__
   SYSCALL_INIT(__NR_semtimedop);
+#endif
   SYSCALL_INIT(__NR_fadvise64);
   SYSCALL_INIT(__NR_timer_create);
   SYSCALL_INIT(__NR_timer_settime);
@@ -314,7 +330,9 @@ void syscalls_init(void) {
   SYSCALL_INIT(__NR_mknodat);
   SYSCALL_INIT(__NR_fchownat);
   SYSCALL_INIT(__NR_futimesat);
+#ifdef __x86_64__
   SYSCALL_INIT(__NR_newfstatat);
+#endif
   SYSCALL_INIT(__NR_unlinkat);
   SYSCALL_INIT(__NR_renameat);
   SYSCALL_INIT(__NR_linkat);
@@ -372,7 +390,9 @@ void syscalls_init(void) {
   SYSCALL_INIT(__NR_seccomp);
   SYSCALL_INIT(__NR_getrandom);
   SYSCALL_INIT(__NR_memfd_create);
+#ifdef __x86_64__
   SYSCALL_INIT(__NR_kexec_file_load);
+#endif
   SYSCALL_INIT(__NR_bpf);
   SYSCALL_INIT(__NR_execveat);
   SYSCALL_INIT(__NR_userfaultfd);
