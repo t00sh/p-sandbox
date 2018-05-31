@@ -52,7 +52,7 @@ static void parse_options(struct sandbox *sandb, int argc, char **argv) {
       usage(argv[0], EXIT_SUCCESS);
       break;
     case 'l':
-      sandb->log = fopen(optarg, "w");
+      sandb->log = fopen(optarg, "a");
       if(sandb->log == NULL)
         LOG_ERR(stderr, "Failed to open %s", optarg);
       break;
