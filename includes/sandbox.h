@@ -8,6 +8,7 @@
 
 struct sandbox {
   pid_t pid;
+  pid_t main_pid;
   int argc;
   char **argv;
   bool trace;

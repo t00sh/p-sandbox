@@ -21,8 +21,6 @@ static void sandbox_kill(struct sandbox *sandb) {
   if(sandb->log != stdout && sandb->log != stderr) {
     fclose(sandb->log);
   }
-  kill(sandb->pid, SIGKILL);
-  wait(NULL);
   exit(EXIT_FAILURE);
 }
 
@@ -47,22 +45,35 @@ static void sandbox_handle_syscall(struct sandbox *sandb) {
   }
 }
 
+static void set_ptrace_opts(struct sandbox *sandb, pid_t pid) {
+  if(ptrace(PTRACE_SETOPTIONS, pid, 0,
+            PTRACE_O_TRACEFORK | PTRACE_O_TRACEVFORK |
+            PTRACE_O_TRACECLONE | PTRACE_O_EXITKILL) < 0) {
+    LOG_ERR(sandb->log, "Failed to PTRACE_SETOPTIONS");
+  }
+}
+
 static void sandbox_step(struct sandbox *sandb) {
   int status;
 
   if(ptrace(PTRACE_SYSCALL, sandb->pid, NULL, NULL) < 0) {
     if(errno == ESRCH) {
       waitpid(sandb->pid, &status, __WALL | WNOHANG);
-      sandbox_kill(sandb);
+      if(sandb->pid == sandb->main_pid) {
+        sandbox_kill(sandb);
+      }
+      sandb->pid = wait(NULL);
+      return;
     } else {
       LOG_ERR(sandb->log, "Failed to PTRACE_SYSCALL");
     }
   }
 
-  wait(&status);
+  sandb->pid = wait(&status);
 
-  if(WIFEXITED(status))
-    exit(EXIT_SUCCESS);
+  if(WIFEXITED(status) && sandb->pid == sandb->main_pid) {
+    sandbox_kill(sandb);
+  }
 
   if(WIFSTOPPED(status)) {
     sandbox_handle_syscall(sandb);
@@ -70,7 +81,7 @@ static void sandbox_step(struct sandbox *sandb) {
     if(ptrace(PTRACE_SYSCALL, sandb->pid, NULL, NULL) < 0) {
       LOG_ERR(sandb->log, "Failed to PTRACE_SYSCALL");
     }
-    wait(&status);
+    sandb->pid = wait(NULL);
   }
 }
 
@@ -85,10 +96,8 @@ void sandbox_dump_address(struct sandbox *sandb,
   }
 
   for(i = 0; i < length; i += sizeof word) {
+    printf("%lx\n", address + i);
     word = ptrace(PTRACE_PEEKDATA, sandb->pid, address + i, NULL);
-    if(word < 0) {
-      LOG_ERR(sandb->log, "Failed to PTRACE_PEEKDATA");
-    }
 
     if(i + sizeof word > (size_t) length) {
       memcpy(buffer + i, &word, length - i);
@@ -107,10 +116,13 @@ void sandbox_init(struct sandbox *sandb) {
   sandb->trace = false;
   sandb->log = stdout;
   sandb->pid = -1;
+  sandb->main_pid = -1;
 }
 
 void sandbox_run(struct sandbox *sandb) {
+
   sandb->pid = fork();
+  sandb->main_pid = sandb->pid;
 
   if(sandb->pid == -1) {
     LOG_ERR(sandb->log, "Error on fork");
@@ -127,6 +139,8 @@ void sandbox_run(struct sandbox *sandb) {
   } else {
     wait(NULL);
   }
+
+  set_ptrace_opts(sandb, sandb->pid);
 
   for(;;) {
     sandbox_step(sandb);
