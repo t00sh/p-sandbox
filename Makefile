@@ -5,7 +5,7 @@ SOURCES = $(wildcard src/*.c)
 OBJECTS = $(SOURCES:.c=.o)
 DEPS = $(OBJECTS:.o=.d)
 
-CFLAGS = -O2 -Wall -Wextra -Wwrite-strings -Wstrict-prototypes -std=c11
+CFLAGS = -O2 -Wall -Wextra -Wwrite-strings -Wstrict-prototypes -std=c11 -g
 CPPFLAGS = -I./includes -MD -MP
 LDFLAGS =
 
