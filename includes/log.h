@@ -21,6 +21,7 @@
 #define LOGN(_stream, ...) do {                 \
     LOG(_stream, __VA_ARGS__);                  \
     fprintf(_stream, "\n");                     \
+    fflush(_stream);                            \
   } while(0)
 
 #define LOG_ERRX(_stream, ...) do {             \

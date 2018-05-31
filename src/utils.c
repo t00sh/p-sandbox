@@ -10,7 +10,7 @@ void hexdump_buffer(FILE *stream, uint8_t *buffer, size_t length) {
   size_t i, j;
 
   for(i = 0; i < length; i += 16) {
-    LOG(stream, " ");
+    LOG(stream, "%08x    ", (unsigned int) i);
     for(j = 0; j < 16; j++) {
       if(i + j < length) {
         LOG_APPEND(stream, "%.2" PRIx8 " ", buffer[i + j]);

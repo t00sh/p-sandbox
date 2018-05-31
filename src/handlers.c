@@ -1,4 +1,5 @@
 #include <sys/syscall.h>
+#include "log.h"
 #include "sandbox.h"
 #include "syscalls.h"
 
@@ -7,7 +8,9 @@ static void write_handler(struct sandbox *sandb,
 
   size_t length = GET_ARG3_REG(regs);
   long address = GET_ARG2_REG(regs);
+  int fd = GET_ARG1_REG(regs);
 
+  LOGN(sandb->log, "fd=%d, length=%zu", fd, length);
   sandbox_dump_address(sandb, address, length);
 }
 
