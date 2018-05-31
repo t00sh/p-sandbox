@@ -18,6 +18,9 @@
 #include "utils.h"
 
 static void sandbox_kill(struct sandbox *sandb) {
+  if(sandb->log != stdout && sandb->log != stderr) {
+    fclose(sandb->log);
+  }
   kill(sandb->pid, SIGKILL);
   wait(NULL);
   exit(EXIT_FAILURE);
@@ -40,6 +43,33 @@ static void sandbox_handle_syscall(struct sandbox *sandb) {
 
   printf("[SANDBOX] Executing syscall %s...\n", syscall_string(syscall_reg));
   syscall_exec_handler(syscall_reg, sandb, &regs);
+}
+
+static void sandbox_step(struct sandbox *sandb) {
+  int status;
+
+  if(ptrace(PTRACE_SYSCALL, sandb->pid, NULL, NULL) < 0) {
+    if(errno == ESRCH) {
+      waitpid(sandb->pid, &status, __WALL | WNOHANG);
+      sandbox_kill(sandb);
+    } else {
+      err(EXIT_FAILURE, "[SANDBOX] Failed to PTRACE_SYSCALL");
+    }
+  }
+
+  wait(&status);
+
+  if(WIFEXITED(status))
+    exit(EXIT_SUCCESS);
+
+  if(WIFSTOPPED(status)) {
+    sandbox_handle_syscall(sandb);
+
+    if(ptrace(PTRACE_SYSCALL, sandb->pid, NULL, NULL) < 0) {
+      err(EXIT_FAILURE, "[SANDBOX] Failed to PTRACE_SYSCALL");
+    }
+    wait(&status);
+  }
 }
 
 void sandbox_dump_address(struct sandbox *sandb,
@@ -67,49 +97,32 @@ void sandbox_dump_address(struct sandbox *sandb,
   free(buffer);
 }
 
-void sandbox_init(struct sandbox *sandb, int argc, char **argv) {
-  sandb->argc = argc;
-  sandb->argv = argv;
+void sandbox_init(struct sandbox *sandb) {
+  sandb->argv = NULL;
+  sandb->argc = 0;
+  sandb->trace = false;
+  sandb->log = stdout;
+  sandb->pid = -1;
+}
+
+void sandbox_run(struct sandbox *sandb) {
   sandb->pid = fork();
 
   if(sandb->pid == -1)
-    err(EXIT_FAILURE, "[SANDBOX] Error on fork:");
+    err(EXIT_FAILURE, "[SANDBOX] Error on fork");
 
   if(sandb->pid == 0) {
 
     if(ptrace(PTRACE_TRACEME, 0, NULL, NULL) < 0)
-      err(EXIT_FAILURE, "[SANDBOX] Failed to PTRACE_TRACEME:");
+      err(EXIT_FAILURE, "[SANDBOX] Failed to PTRACE_TRACEME");
 
-    execv(argv[0], argv);
-    err(EXIT_FAILURE, "[SANDBOX] Failed to execv:");
+    execv(sandb->argv[0], sandb->argv);
+    err(EXIT_FAILURE, "[SANDBOX] Failed to execv");
   } else {
     wait(NULL);
   }
-}
 
-void sandbox_run(struct sandbox *sandb) {
-  int status;
-
-  if(ptrace(PTRACE_SYSCALL, sandb->pid, NULL, NULL) < 0) {
-    if(errno == ESRCH) {
-      waitpid(sandb->pid, &status, __WALL | WNOHANG);
-      sandbox_kill(sandb);
-    } else {
-      err(EXIT_FAILURE, "[SANDBOX] Failed to PTRACE_SYSCALL:");
-    }
-  }
-
-  wait(&status);
-
-  if(WIFEXITED(status))
-    exit(EXIT_SUCCESS);
-
-  if(WIFSTOPPED(status)) {
-    sandbox_handle_syscall(sandb);
-
-    if(ptrace(PTRACE_SYSCALL, sandb->pid, NULL, NULL) < 0) {
-      err(EXIT_FAILURE, "[SANDBOX] Failed to PTRACE_SYSCALL:");
-    }
-    wait(&status);
+  for(;;) {
+    sandbox_step(sandb);
   }
 }
