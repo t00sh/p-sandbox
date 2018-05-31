@@ -46,7 +46,9 @@ void syscall_add_handler(int syscall, syscall_handler handler) {
 void syscall_exec_handler(int syscall, struct sandbox *sandb,
                           struct user_regs_struct *regs) {
   assert(syscall >= 0 && syscall < SYSCALLS);
-  syscalls[syscall].handler(sandb, regs);
+  if(syscalls[syscall].handler) {
+    syscalls[syscall].handler(sandb, regs);
+  }
 }
 
 void syscalls_init(void) {
