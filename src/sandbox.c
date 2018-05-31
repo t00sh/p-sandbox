@@ -96,7 +96,6 @@ void sandbox_dump_address(struct sandbox *sandb,
   }
 
   for(i = 0; i < length; i += sizeof word) {
-    printf("%lx\n", address + i);
     word = ptrace(PTRACE_PEEKDATA, sandb->pid, address + i, NULL);
 
     if(i + sizeof word > (size_t) length) {
